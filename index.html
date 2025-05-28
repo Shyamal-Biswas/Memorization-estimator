@@ -1,0 +1,21 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Memorization Time Estimator</title>
+</head>
+<body>
+    <h1>Memorization Time Estimator</h1>
+    <form method="post">
+        <textarea name="definition" rows="4" cols="50" placeholder="Enter your definition here..."></textarea><br>
+        <button type="submit">Estimate Time</button>
+    </form>
+    {% if result %}
+    <h2>Result</h2>
+    <p><strong>Definition:</strong> {{ result.definition }}</p>
+    <p><strong>Difficulty:</strong> {{ result.difficulty }}</p>
+    <p><strong>Time Range:</strong> {{ result.time_range }}</p>
+    <p><strong>Exact Time:</strong> {{ result.exact_time }}</p>
+    {% endif %}
+</body>
+</html>

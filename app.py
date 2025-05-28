@@ -1,51 +1,48 @@
-from flask import Flask, request, render_template_string
-import random
+
+from flask import Flask, request, render_template
+import numpy as np
+import faiss
+import json
+from sentence_transformers import SentenceTransformer
 
 app = Flask(__name__)
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
-HTML_TEMPLATE = """
-<!doctype html>
-<title>Memorization Estimator</title>
-<h2>🧠 Enter a Definition to Estimate Memorization Time</h2>
-<form method=post>
-  <textarea name=definition rows=6 cols=80 placeholder="Type your definition here..."></textarea><br><br>
-  <input type=submit value="Estimate">
-</form>
-{% if result %}
-  <h3>Difficulty: {{ result.difficulty }}</h3>
-  <p>Estimated Time Range: {{ result.time_range }} minutes</p>
-  <p>Exact Time: {{ result.exact_time }} minutes</p>
-{% endif %}
-"""
+# Load embeddings and labels
+embeddings = np.load("definition_embeddings.npy")
+with open("definition_labels.json", "r") as f:
+    labels = json.load(f)
 
-REFERENCE_TIME = 17
+# Build FAISS index
+dimension = embeddings.shape[1]
+index = faiss.IndexFlatL2(dimension)
+index.add(embeddings)
 
-def estimate_time(def_text):
-    if len(def_text.split()) < 10:
-        difficulty = "easy"
-        factor = (0.6, 0.8)
-    elif len(def_text.split()) < 25:
-        difficulty = "medium"
-        factor = (1.0, 1.2)
-    else:
-        difficulty = "hard"
-        factor = (1.75, 2.0)
-    low, high = round(REFERENCE_TIME * factor[0]), round(REFERENCE_TIME * factor[1])
-    exact = round((low + high) / 2 + random.uniform(-1, 1), 1)
-    return {
-        "difficulty": difficulty,
-        "time_range": f"{low}-{high}",
-        "exact_time": exact
-    }
+# Difficulty to time mapping
+time_mapping = {
+    "easy": (10, 13),
+    "medium": (17, 20),
+    "hard": (30, 35)
+}
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     result = None
     if request.method == "POST":
         user_input = request.form["definition"]
-        result = estimate_time(user_input)
-    return render_template_string(HTML_TEMPLATE, result=result)
+        user_vector = model.encode([user_input])
+        _, indices = index.search(np.array(user_vector), k=5)
+        top_labels = [labels[i] for i in indices[0]]
+        difficulty = max(set(top_labels), key=top_labels.count)
+        time_range = time_mapping[difficulty]
+        exact_time = round(np.mean(time_range), 2)
+        result = {
+            "definition": user_input,
+            "difficulty": difficulty,
+            "time_range": f"{time_range[0]}–{time_range[1]} minutes",
+            "exact_time": f"{exact_time} minutes"
+        }
+    return render_template("index.html", result=result)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-      
+    app.run(debug=True)
